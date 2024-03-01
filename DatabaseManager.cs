@@ -17,8 +17,18 @@ namespace OrderAssemblySystem
                 string query = "SELECT * FROM Inventory";
                 SqlDataAdapter adapter = new SqlDataAdapter(query, connection);
 
-                connection.Open();
-                adapter.Fill(dataTable);
+                               try
+                {
+                    connection.Open();
+                    adapter.Fill(dataTable);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Ошибка при загрузке данных из базы данных: " + ex.Message);
+                }
+
+                //connection.Open();
+                //adapter.Fill(dataTable);
             }
 
             return dataTable;
@@ -34,8 +44,17 @@ namespace OrderAssemblySystem
                 command.Parameters.AddWithValue("@NomenclatureName", nomenclatureName);
                 command.Parameters.AddWithValue("@Quantity", quantity);
 
-                connection.Open();
-                command.ExecuteNonQuery();
+                //connection.Open();
+                //command.ExecuteNonQuery();
+                try
+                {
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Ошибка при добавлении номенклатуры в заказ: " + ex.Message);
+                }
             }
         }
     }
