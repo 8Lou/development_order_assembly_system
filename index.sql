@@ -145,4 +145,54 @@ BEGIN
            Item.value('(Quantity/text())[1]', 'INT')
     FROM @OrderItems.nodes('/OrderItems/Item') AS OrderItems(Item);
 END;
+
+- Проверка наличия комплектов и разбор их по запчастям перед добавлением в заказ
+INSERT INTO ScheduledItems (OrderID, AssemblySiteID, NomenclatureID, Quantity)
+SELECT @OrderID AS OrderID, 
+       Inventory.AssemblySiteID, 
+       KitComponents.ComponentID AS NomenclatureID, 
+       MIN(Inventory.Quantity, OrderItems.Quantity * KitComponents.Quantity) AS Quantity
+FROM Inventory
+INNER JOIN KitComponents ON Inventory.NomenclatureID = KitComponents.KitID
+INNER JOIN OrderItems ON KitComponents.ComponentID = OrderItems.NomenclatureID
+WHERE OrderItems.OrderID = @OrderID
+GROUP BY Inventory.AssemblySiteID, KitComponents.ComponentID;
+
+-- Обработка оставшихся позиций заказа после разбора комплектов
+INSERT INTO ScheduledItems (OrderID, AssemblySiteID, NomenclatureID, Quantity)
+SELECT @OrderID AS OrderID, 
+       AssemblySites.AssemblySiteID, 
+       OrderItems.NomenclatureID, 
+       MAX(0, OrderItems.Quantity - ISNULL(SUM(Quantity), 0)) AS Quantity
+FROM OrderItems
+LEFT JOIN ScheduledItems ON OrderItems.NomenclatureID = ScheduledItems.NomenclatureID
+INNER JOIN AssemblySites ON OrderItems.NomenclatureID = AssemblySites.NomenclatureID
+WHERE OrderItems.OrderID = @OrderID
+GROUP BY AssemblySites.AssemblySiteID, OrderItems.NomenclatureID, OrderItems.Quantity;
+
+
+ -- Проверка наличия "свободных остатков" и использование их для сборки
+    INSERT INTO ScheduledItems (OrderID, AssemblySiteID, NomenclatureID, Quantity)
+    SELECT @OrderID AS OrderID, 
+           InventoryFreeItems.AssemblySiteID, 
+           InventoryFreeItems.NomenclatureID, 
+           MIN(InventoryFreeItems.Quantity, OrderItems.Quantity) AS Quantity
+    FROM InventoryFreeItems
+    INNER JOIN OrderItems ON InventoryFreeItems.NomenclatureID = OrderItems.NomenclatureID
+    WHERE OrderItems.OrderID = @OrderID
+    GROUP BY InventoryFreeItems.AssemblySiteID, InventoryFreeItems.NomenclatureID;
+
+    -- Использование задания на сборку для оставшихся позиций заказа
+    INSERT INTO ScheduledItems (OrderID, AssemblySiteID, NomenclatureID, Quantity)
+    SELECT @OrderID AS OrderID, 
+           AssemblySites.AssemblySiteID, 
+           OrderItems.NomenclatureID, 
+           MAX(0, OrderItems.Quantity - ISNULL(SUM(Quantity), 0)) AS Quantity
+    FROM OrderItems
+    LEFT JOIN ScheduledItems ON OrderItems.NomenclatureID = ScheduledItems.NomenclatureID
+    INNER JOIN AssemblySites ON OrderItems.NomenclatureID = AssemblySites.NomenclatureID
+    WHERE OrderItems.OrderID = @OrderID
+    GROUP BY AssemblySites.AssemblySiteID, OrderItems.NomenclatureID, OrderItems.Quantity;
+
+END;
 GO
